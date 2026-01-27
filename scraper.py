@@ -50,9 +50,20 @@ class WikiScraper:
         text = soup.get_text()
         return text
 
+    def summary(self):
+        html = self.get_html()
+        if html is None:
+            return None
+        soup = BeautifulSoup(html, 'html.parser')
+        summ = soup.find('p')
+        if summ is None:
+            return "No paragraph to display."
+        return summ.text
+
 
 scraper = WikiScraper(
     base_url="https://bulbapedia.bulbagarden.net/wiki/",
-    searched_phrase = "Team Rocket"
+    searched_phrase = input("Search: ")
 )
-print(scraper.get_text())
+print(scraper.summary())
+
