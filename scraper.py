@@ -1,9 +1,14 @@
 import io
-import re
+import json
+import math
+import os
 from collections import Counter
+import numpy as np
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
+import wordfreq as wf
+import matplotlib.pyplot as plt
 
 class WikiScraper:
     """ Object for wiki scraping.
@@ -165,6 +170,7 @@ class WikiScraper:
         soup = BeautifulSoup(html, 'html.parser')
         tables = soup.find_all('table', limit=n)
         if tables is None or len(tables) < n:
+            print(f"There is less than {n} table in the article.")
             return None
 
         if first_row_is_header:
@@ -206,26 +212,143 @@ class WikiScraper:
         text = self.get_text()
         if text is None:
             return None
-        clean_text = re.sub(r'[^a-zA-ZèéêëÈÉÊËàáâãäåÀÁÂÃÄÅ\s]', ' ', text).lower()
-        words = clean_text.split()
+
+        words = wf.tokenize(text, lang='en')
 
         counted_words = Counter(words)
 
         return dict(counted_words)
+
+    def add_words_to_json(self, words, filename="words_count.json"):
+        """ Adds counted words to the JSON file.
+
+        :param words: Dictionary of words, with their count as a value.
+        :param filename: Name of the file to add the words count.
+        """
+
+        if os.path.isfile(filename):
+            with open(filename, 'r') as f:
+                try:
+                    old_data = json.load(f)
+                except json.JSONDecodeError:
+                    old_data = {}
+        else:
+            old_data = {}
+
+        new_data = Counter(old_data) + Counter(words)
+
+        with open(filename, 'w') as f:
+            json.dump(new_data, f)
+
+    def analyze_relative_word_frequency(self, mode, n, filename="words_count.json", chart=False, chart_path=None):
+        """ Performs analysis of the words counted in the JSON file.
+
+            Compares the frequencies of words counted in JSON file to the frequencies
+            of the top english words. Depending on 'mode' parameter it takes top
+            n words in english language or top n words from counted words.
+
+            :param mode: 'language' or 'article' - to decide which top words to take.
+            :param n: How many words to compare.
+            :param filename: Name of the JSON file with counted words. Defaults to 'words_count.json'.
+            :param chart: If true, creates grouped bar chart comparing frequencies of the words.
+            :param chart_path: path, where to save the chart. If None, current directory is used.
+
+        :return:
+            Returns DataFrame with three columns: word, frequency in the article, frequency in english.
+            If frequency of the word is zero, DataFrame contains NaN there.
+            If specified directory for the chart cannot be created or accessed, still returns DataFrame.
+
+        """
+        if os.path.isfile(filename):
+            with open(filename, 'r') as f:
+                try:
+                    my_data = json.load(f)
+                except json.JSONDecodeError:
+                    my_data = {}
+        else:
+            my_data = {}
+
+        words_total = sum(my_data.values())
+
+        df = pd.DataFrame([], columns=['word', 'frequency in the article', 'frequency in english'])
+
+        if mode == 'language':
+            top_n_words = wf.top_n_list(lang='en', n=n, wordlist='small')
+        elif mode == 'article':
+            top_n_words = dict(sorted(my_data.items(), key=lambda item: item[1], reverse=True)[:n])
+        else:
+            print(f"No mode named {mode}")
+            return None
+
+        for word in top_n_words:
+            my_freq = my_data.get(word, 0) / words_total
+            if my_freq > 0:
+                my_zipf = math.log10(my_freq * 10 ** 9)
+            else:
+                my_zipf = np.nan
+
+            # Wordfreq zipf values are also rounded like that.
+            my_zipf = round(my_zipf, 2)
+
+            lang_zipf = wf.zipf_frequency(word, lang='en', wordlist='small')
+
+            if lang_zipf == 0:
+                lang_zipf = np.nan
+
+            new_row = pd.DataFrame([[word, my_zipf, lang_zipf]],
+                                   columns=['word', 'frequency in the article', 'frequency in english'])
+            df = pd.concat([df, new_row], ignore_index=True)
+
+        if chart:
+            if chart_path is None:
+                chart_path = 'chart.png'
+
+            dirname = os.path.dirname(chart_path)
+
+            if dirname and not os.path.exists(dirname):
+                try:
+                    os.makedirs(dirname)
+                except OSError:
+                    print(f'Error: Creating directory {dirname}')
+                    return df
+
+            ax = df.plot(
+                x='word',
+                y=['frequency in the article', 'frequency in english'],
+                kind='bar',
+                color=['blue', 'red'],
+                rot=0,
+                width=0.6
+            )
+
+            plt.title("Frequency of some words on Wiki")
+            plt.ylabel("frequency")
+            plt.xlabel("")
+            plt.legend(["Wiki", "English"])
+            try:
+                plt.savefig(chart_path)
+            except OSError:
+                print("Error: Saving the chart not possible.")
+                return df
+
+
+        return df
 
 
 scraper = WikiScraper(
     base_url="https://bulbapedia.bulbagarden.net/wiki/",
     searched_phrase = input("Search: ")
 )
-print(scraper.get_text())
 
-table = scraper.find_table(2, first_row_is_header=False)
+table = scraper.find_table(5, first_row_is_header=False)
 print(table)
+#scraper.save_table(table)
 
 d = scraper.count_words()
 print(d)
+scraper.add_words_to_json(d)
 
-scraper.save_table(table)
+analysis = scraper.analyze_relative_word_frequency(mode="language", n=5, chart=True, chart_path='chart.png')
+print(analysis)
 
 
