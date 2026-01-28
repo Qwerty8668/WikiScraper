@@ -1,9 +1,15 @@
 import io
-import re
+import json
+import math
+import os
+import time
 from collections import Counter
+import numpy as np
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
+import wordfreq as wf
+import matplotlib.pyplot as plt
 
 class WikiScraper:
     """ Object for wiki scraping.
@@ -92,10 +98,10 @@ class WikiScraper:
                     print(f"Site {self.url} cannot be reached (not your fault tho!)"
                           f" (error code {status_code}).")
 
-            except requests.exceptions.ConnectionError as e:
+            except requests.exceptions.ConnectionError:
                 print(f"Connection Error: Check your internet connection.")
 
-            except requests.exceptions.Timeout as e:
+            except requests.exceptions.Timeout:
                 print(f"Timeout Error: Server is not responding.")
 
             except Exception as err:
@@ -165,6 +171,7 @@ class WikiScraper:
         soup = BeautifulSoup(html, 'html.parser')
         tables = soup.find_all('table', limit=n)
         if tables is None or len(tables) < n:
+            print(f"There is less than {n} table in the article.")
             return None
 
         if first_row_is_header:
@@ -206,26 +213,177 @@ class WikiScraper:
         text = self.get_text()
         if text is None:
             return None
-        clean_text = re.sub(r'[^a-zA-ZèéêëÈÉÊËàáâãäåÀÁÂÃÄÅ\s]', ' ', text).lower()
-        words = clean_text.split()
+
+        words = wf.tokenize(text, lang='en')
 
         counted_words = Counter(words)
 
         return dict(counted_words)
 
+    def get_article_links(self):
+        """ Returns a list of links from the website, that directs to another wiki article.
 
-scraper = WikiScraper(
-    base_url="https://bulbapedia.bulbagarden.net/wiki/",
-    searched_phrase = input("Search: ")
-)
-print(scraper.get_text())
+        :return:
+            Python list of links on the website that starts with self.base_url
+        """
+        html = self.html
+        if html is None:
+            return None
 
-table = scraper.find_table(2, first_row_is_header=False)
-print(table)
+        soup = BeautifulSoup(html, 'html.parser')
 
-d = scraper.count_words()
-print(d)
+        all_links = soup.find_all('a')
+        wiki_article_links = []
+        for link in all_links:
+            if link.has_attr('href'):
+                link = link['href']
+                if link.startswith(self.base_url):
+                    wiki_article_links.append(link)
 
-scraper.save_table(table)
+        return wiki_article_links
+
+'''============================ OTHER METHODS =============================='''
+
+def add_words_to_json(words, filename="words_count.json"):
+    """ Adds counted words to the JSON file.
+
+    :param words: Dictionary of words, with their count as a value.
+    :param filename: Name of the file to add the words count.
+    """
+
+    if os.path.isfile(filename):
+        with open(filename, 'r') as f:
+            try:
+                old_data = json.load(f)
+            except json.JSONDecodeError:
+                old_data = {}
+    else:
+        old_data = {}
+
+    new_data = Counter(old_data) + Counter(words)
+
+    with open(filename, 'w') as f:
+        json.dump(new_data, f)
+
+def auto_count_words(searched_phrase, n, t, visited=None):
+    """Automatically counts words in the articles, iterating through them using onsite links.
+
+    Recursively performs DFS on found links. Goes through maximally n links, waits t seconds before going to the next link.
+
+    :param searched_phrase: Phrase to search for.
+    :param n: Number of links yet to check.
+    :param t: Time between site downloads.
+    :param visited: Dictionary of visited links.
+    """
+    if visited is None:
+        visited = {}
+    if visited.get(searched_phrase, False):
+        return
+
+    visited[searched_phrase] = True
+    print(searched_phrase)
+    scraper = WikiScraper('https://bulbapedia.bulbagarden.net/wiki/', searched_phrase, False)
+    scraper.count_words()
+
+    links = scraper.get_article_links()
+
+    for link in links:
+        if n == 0: return
+        n -= 1
+        phrase = link.split('/')[-1]
+        time.sleep(t)
+        auto_count_words(phrase, n, t, visited)
+
+def analyze_relative_word_frequency(mode, n, filename="words_count.json", chart=False, chart_path=None):
+    """ Performs analysis of the words counted in the JSON file.
+
+        Compares the frequencies of words counted in JSON file to the frequencies
+        of the top english words. Depending on 'mode' parameter it takes top
+        n words in english language or top n words from counted words.
+
+        :param mode: 'language' or 'article' - to decide which top words to take.
+        :param n: How many words to compare.
+        :param filename: Name of the JSON file with counted words. Defaults to 'words_count.json'.
+        :param chart: If true, creates grouped bar chart comparing frequencies of the words.
+        :param chart_path: path, where to save the chart. If None, current directory is used.
+
+    :return:
+        Returns DataFrame with three columns: word, frequency in the article, frequency in english.
+        If frequency of the word is zero, DataFrame contains NaN there.
+        If specified directory for the chart cannot be created or accessed, still returns DataFrame.
+
+    """
+    if os.path.isfile(filename):
+        with open(filename, 'r') as f:
+            try:
+                my_data = json.load(f)
+            except json.JSONDecodeError:
+                my_data = {}
+    else:
+        my_data = {}
+
+    words_total = sum(my_data.values())
+
+    df = pd.DataFrame([], columns=['word', 'frequency in the article', 'frequency in english'])
+
+    if mode == 'language':
+        top_n_words = wf.top_n_list(lang='en', n=n, wordlist='small')
+    elif mode == 'article':
+        top_n_words = dict(sorted(my_data.items(), key=lambda item: item[1], reverse=True)[:n])
+    else:
+        print(f"No mode named {mode}")
+        return None
+
+    for word in top_n_words:
+        my_freq = my_data.get(word, 0) / words_total
+        if my_freq > 0:
+            my_zipf = math.log10(my_freq * 10 ** 9)
+        else:
+            my_zipf = np.nan
+
+        # Wordfreq zipf values are also rounded like that.
+        my_zipf = round(my_zipf, 2)
+
+        lang_zipf = wf.zipf_frequency(word, lang='en', wordlist='small')
+
+        if lang_zipf == 0:
+            lang_zipf = np.nan
+
+        new_row = pd.DataFrame([[word, my_zipf, lang_zipf]],
+                               columns=['word', 'frequency in the article', 'frequency in english'])
+        df = pd.concat([df, new_row], ignore_index=True)
+
+    if chart:
+        if chart_path is None:
+            chart_path = 'chart.png'
+
+        dirname = os.path.dirname(chart_path)
+
+        if dirname and not os.path.exists(dirname):
+            try:
+                os.makedirs(dirname)
+            except OSError:
+                print(f'Error: Creating directory {dirname}')
+                return df
+
+        df.plot(
+            x='word',
+            y=['frequency in the article', 'frequency in english'],
+            kind='bar',
+            color=['blue', 'red'],
+            rot=0,
+            width=0.6
+        )
+
+        plt.title("Frequency of some words on Wiki")
+        plt.ylabel("frequency")
+        plt.xlabel("")
+        plt.legend(["Wiki", "English"])
+        try:
+            plt.savefig(chart_path)
+        except OSError:
+            print("Error: Saving the chart not possible.")
+            return df
 
 
+    return df
