@@ -17,7 +17,8 @@ class WikiScraper:
     Attributes: \n
         base_url: Base for the url of the wiki (e.g. https://example.com/wiki/)\n
         searched_phrase: Article name on the wiki.\n
-        use_local_html_file: If true, local file is used to obtain the code. Otherwise, requests library is used to download the source code. \n
+        use_local_html_file: If true, local file is used to obtain the code.
+                             Otherwise, requests library is used to download the source code. \n
         formatted_phrase: searched_phrase, where space character is replaced with underscore.\n
         url: base_url + formatted_phrase (e.g. https://example.com/wiki/Search_Me).\n
         html: HTML code obtained with get_html() method.\n
@@ -43,7 +44,7 @@ class WikiScraper:
         self.html = self.get_html()
 
     def get_html(self):
-        """ Returns HTML from self.url.
+        """ Returns HTML of the article (without menu of the site) from self.url.
 
             If self.use_local_html_file is set true, HTML is obtained offline from your computer.
             Filename used is 'self.formatted_phrase.html', where formatted phrase is searched phrase
@@ -75,7 +76,13 @@ class WikiScraper:
                 response = requests.get(self.url)
                 response.raise_for_status()
 
-                return response.text
+                soup = BeautifulSoup(response.text, 'html.parser')
+                element = soup.find('div', id='content')
+                if element is None:
+                    print("No content found.")
+                    return None
+
+                return str(element)
 
             except requests.exceptions.HTTPError as err:
                 status_code = err.response.status_code
@@ -109,11 +116,16 @@ class WikiScraper:
 
             return None
 
+    def check_html(self):
+        """If self.get_html returned None, return False. Else return True."""
+        if self.html is None:
+            return False
+        return True
+
     def get_text(self):
         """ Returns text from the HTML.
 
-            This method searches for div, that holds the article text,
-            and then uses BeautifulSoup to extract the text.
+            Uses BeautifulSoup to extract the text from the article.
 
         :return:
             If self.html is None, return None.
@@ -125,11 +137,7 @@ class WikiScraper:
             return None
 
         soup = BeautifulSoup(html, 'html.parser')
-        element = soup.find('div', id='mw-content-text')
-        if element is None:
-            print("No content found.")
-            return None
-        text = element.get_text()
+        text = soup.get_text()
         return text
 
     def summary(self):
@@ -151,7 +159,7 @@ class WikiScraper:
         return summ.get_text()
 
     def find_table(self, n, first_row_is_header=False):
-        """ Returns the nth table in the article.
+        """ Returns the nth table in the article and table of number of each word in the table.
 
         First column is always taken as the row indexes.
 
@@ -160,7 +168,7 @@ class WikiScraper:
                                     Otherwise, header is not specified.
 
         :return:
-            On success, returns the nth table as a dataframe.
+            On success, returns the nth table as a dataframe and dataframe with counted words.
             If self.html is none, there is less than n tables in the article
             or the HTML for the table is broken (pandas couldn't read it), returns None.
         """
@@ -189,7 +197,13 @@ class WikiScraper:
             print(f"Unexpected error converting HTML to data frame: {err}")
             return None
 
-        return df
+        count = (pd.Series(df.values.flatten()) # flatten the df into one column, without labels.
+                 .value_counts()
+                 .reset_index()
+                 .set_axis(['words', 'count'], axis=1)
+                 )
+
+        return df, count
 
     def save_table(self, df):
         """ Saves dataframe to the csv file.
@@ -237,14 +251,23 @@ class WikiScraper:
         for link in all_links:
             if link.has_attr('href'):
                 link = link['href']
-                if link.startswith(self.base_url):
+                # We are taking only links that stay in the wiki, and we are skipping things like 'File:' 'User:' etc.
+                if link.startswith('/wiki/') and not ':' in link:
                     wiki_article_links.append(link)
 
         return wiki_article_links
 
+    def print_license_footer(self):
+        """Prints license information to ensure compliance."""
+        print("-" * 40)
+        print(f"Program output based on the article available at: {self.url}")
+        print("Content is subject to the wiki's license BY-NC-SA.")
+        print("Please verify the license before further use.")
+        print("-" * 40)
+
 '''============================ OTHER METHODS =============================='''
 
-def add_words_to_json(words, filename="words_count.json"):
+def add_words_to_json(words, filename="word-counts.json"):
     """ Adds counted words to the JSON file.
 
     :param words: Dictionary of words, with their count as a value.
@@ -263,13 +286,15 @@ def add_words_to_json(words, filename="words_count.json"):
     new_data = Counter(old_data) + Counter(words)
 
     with open(filename, 'w') as f:
-        json.dump(new_data, f)
+        json.dump(new_data, f, indent=4)
 
-def auto_count_words(searched_phrase, n, t, visited=None):
+def auto_count_words(base_url, searched_phrase, n, t, visited=None):
     """Automatically counts words in the articles, iterating through them using onsite links.
 
-    Recursively performs DFS on found links. Goes through maximally n links, waits t seconds before going to the next link.
+    Recursively performs DFS on found links. Goes through maximally n links,
+    waits t seconds before going to the next link.
 
+    :param base_url: Base for the url of the wiki (e.g. https://example.com/wiki/)
     :param searched_phrase: Phrase to search for.
     :param n: Number of links yet to check.
     :param t: Time between site downloads.
@@ -278,23 +303,26 @@ def auto_count_words(searched_phrase, n, t, visited=None):
     if visited is None:
         visited = {}
     if visited.get(searched_phrase, False):
-        return
+        return n
 
     visited[searched_phrase] = True
-    print(searched_phrase)
-    scraper = WikiScraper('https://bulbapedia.bulbagarden.net/wiki/', searched_phrase, False)
-    scraper.count_words()
+    print(n, searched_phrase)
+    n -= 1
+    scraper = WikiScraper(base_url, searched_phrase)
+    count = scraper.count_words()
+    add_words_to_json(count)
 
     links = scraper.get_article_links()
 
     for link in links:
-        if n == 0: return
-        n -= 1
-        phrase = link.split('/')[-1]
+        if n == 0: return 0
+        phrase = link[6:] # Delete '/wiki/' prefix.
         time.sleep(t)
-        auto_count_words(phrase, n, t, visited)
+        n = auto_count_words(base_url, phrase, n, t, visited)
 
-def analyze_relative_word_frequency(mode, n, filename="words_count.json", chart=False, chart_path=None):
+    return n
+
+def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filename="word-counts.json"):
     """ Performs analysis of the words counted in the JSON file.
 
         Compares the frequencies of words counted in JSON file to the frequencies
@@ -303,7 +331,7 @@ def analyze_relative_word_frequency(mode, n, filename="words_count.json", chart=
 
         :param mode: 'language' or 'article' - to decide which top words to take.
         :param n: How many words to compare.
-        :param filename: Name of the JSON file with counted words. Defaults to 'words_count.json'.
+        :param filename: Name of the JSON file with counted words. Defaults to 'word-counts.json'.
         :param chart: If true, creates grouped bar chart comparing frequencies of the words.
         :param chart_path: path, where to save the chart. If None, current directory is used.
 
@@ -382,8 +410,6 @@ def analyze_relative_word_frequency(mode, n, filename="words_count.json", chart=
         try:
             plt.savefig(chart_path)
         except OSError:
-            print("Error: Saving the chart not possible.")
+            print("Error: Saving the chart is not possible.")
             return df
-
-
     return df
