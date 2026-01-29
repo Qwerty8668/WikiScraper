@@ -45,7 +45,7 @@ class WikiScraper:
             exit(1)
 
     def get_html(self):
-        """ Returns HTML from self.url.
+        """ Returns HTML of the article (without menu of the site) from self.url.
 
             If self.use_local_html_file is set true, HTML is obtained offline from your computer.
             Filename used is 'self.formatted_phrase.html', where formatted phrase is searched phrase
@@ -77,7 +77,13 @@ class WikiScraper:
                 response = requests.get(self.url)
                 response.raise_for_status()
 
-                return response.text
+                soup = BeautifulSoup(response.text, 'html.parser')
+                element = soup.find('div', id='content')
+                if element is None:
+                    print("No content found.")
+                    return None
+
+                return str(element)
 
             except requests.exceptions.HTTPError as err:
                 status_code = err.response.status_code
@@ -114,8 +120,7 @@ class WikiScraper:
     def get_text(self):
         """ Returns text from the HTML.
 
-            This method searches for div, that holds the article text,
-            and then uses BeautifulSoup to extract the text.
+            Uses BeautifulSoup to extract the text from the article.
 
         :return:
             If self.html is None, return None.
@@ -127,11 +132,7 @@ class WikiScraper:
             return None
 
         soup = BeautifulSoup(html, 'html.parser')
-        element = soup.find('div', id='mw-content-text')
-        if element is None:
-            print("No content found.")
-            return None
-        text = element.get_text()
+        text = soup.get_text()
         return text
 
     def summary(self):
@@ -245,7 +246,7 @@ class WikiScraper:
         for link in all_links:
             if link.has_attr('href'):
                 link = link['href']
-                if link.startswith(self.base_url):
+                if link.startswith('/wiki/'):
                     wiki_article_links.append(link)
 
         return wiki_article_links
@@ -301,7 +302,7 @@ def auto_count_words(base_url, searched_phrase, n, t, visited=None):
         n -= 1
         phrase = link.split('/')[-1]
         time.sleep(t)
-        auto_count_words(phrase, n, t, visited)
+        auto_count_words(base_url, phrase, n, t, visited)
 
 def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filename="words_count.json"):
     """ Performs analysis of the words counted in the JSON file.
@@ -391,8 +392,6 @@ def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filen
         try:
             plt.savefig(chart_path)
         except OSError:
-            print("Error: Saving the chart not possible.")
+            print("Error: Saving the chart is not possible.")
             return df
-
-
     return df
