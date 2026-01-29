@@ -41,6 +41,8 @@ class WikiScraper:
         self.formatted_phrase = searched_phrase.replace(" ", "_")
         self.url = base_url + self.formatted_phrase
         self.html = self.get_html()
+        if self.html is None:
+            exit(1)
 
     def get_html(self):
         """ Returns HTML from self.url.
