@@ -17,7 +17,8 @@ class WikiScraper:
     Attributes: \n
         base_url: Base for the url of the wiki (e.g. https://example.com/wiki/)\n
         searched_phrase: Article name on the wiki.\n
-        use_local_html_file: If true, local file is used to obtain the code. Otherwise, requests library is used to download the source code. \n
+        use_local_html_file: If true, local file is used to obtain the code.
+                             Otherwise, requests library is used to download the source code. \n
         formatted_phrase: searched_phrase, where space character is replaced with underscore.\n
         url: base_url + formatted_phrase (e.g. https://example.com/wiki/Search_Me).\n
         html: HTML code obtained with get_html() method.\n
@@ -114,6 +115,12 @@ class WikiScraper:
                 print(f"Unexpected error: {err}")
 
             return None
+
+    def check_html(self):
+        """If self.get_html returned None, return False. Else return True."""
+        if self.html is None:
+            return False
+        return True
 
     def get_text(self):
         """ Returns text from the HTML.
@@ -276,7 +283,8 @@ def add_words_to_json(words, filename="words_count.json"):
 def auto_count_words(base_url, searched_phrase, n, t, visited=None):
     """Automatically counts words in the articles, iterating through them using onsite links.
 
-    Recursively performs DFS on found links. Goes through maximally n links, waits t seconds before going to the next link.
+    Recursively performs DFS on found links. Goes through maximally n links,
+    waits t seconds before going to the next link.
 
     :param base_url: Base for the url of the wiki (e.g. https://example.com/wiki/)
     :param searched_phrase: Phrase to search for.
