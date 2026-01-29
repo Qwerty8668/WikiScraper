@@ -29,7 +29,7 @@ def parse_arguments():
 
     group = parser.add_argument_group('Word counting')
     group.add_argument('--count-words', type=str,
-                       help='Count words in the given wiki article. Updates words_count.json file.')
+                       help='Count words in the given wiki article. Updates word-counts.json file.')
 
     group = parser.add_argument_group('Word frequency analysis')
     group.add_argument('--analyze-relative-word-frequency', action='store_true', default=False,
@@ -47,7 +47,7 @@ def parse_arguments():
                        help="Automatically counts words in the articles, iterating through them using onsite links.")
     group.add_argument('--depth', type=int,
                        help="Number of links to check.")
-    group.add_argument('--wait', type=int,
+    group.add_argument('--wait', type=float,
                        help="Time to wait between site downloads.")
 
     return parser.parse_args()
@@ -130,6 +130,7 @@ class WikiController:
                 summary = scraper.summary()
                 if summary is not None:
                     print(summary)
+                scraper.print_license_footer()
             print()
 
         # --table "searched phrase" --number n [--first-row-is-header]
@@ -144,6 +145,7 @@ class WikiController:
 
                 if count is not None:
                     print(count)
+                scraper.print_license_footer()
             print()
 
         # --count-words "searched phrase"
@@ -153,7 +155,8 @@ class WikiController:
             if scraper.check_html():
                 count = scraper.count_words()
                 add_words_to_json(count)
-            print("JSON updated.")
+                print("JSON updated.")
+                scraper.print_license_footer()
             print()
 
 
@@ -174,6 +177,11 @@ class WikiController:
         if self.args.auto_count_words is not None:
             print("=== AUTO COUNT WORDS ===")
             auto_count_words(self.base_url, self.args.auto_count_words, self.args.depth, self.args.wait)
+            print("-" * 40)
+            print(f"Program output based on the article available at: {self.base_url}")
+            print("Content is subject to the wiki's license BY-NC-SA.")
+            print("Please verify the license before further use.")
+            print("-" * 40)
             print()
 
 # Main function.

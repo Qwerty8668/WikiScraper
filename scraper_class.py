@@ -257,9 +257,17 @@ class WikiScraper:
 
         return wiki_article_links
 
+    def print_license_footer(self):
+        """Prints license information to ensure compliance."""
+        print("-" * 40)
+        print(f"Program output based on the article available at: {self.url}")
+        print("Content is subject to the wiki's license BY-NC-SA.")
+        print("Please verify the license before further use.")
+        print("-" * 40)
+
 '''============================ OTHER METHODS =============================='''
 
-def add_words_to_json(words, filename="words_count.json"):
+def add_words_to_json(words, filename="word-counts.json"):
     """ Adds counted words to the JSON file.
 
     :param words: Dictionary of words, with their count as a value.
@@ -300,7 +308,7 @@ def auto_count_words(base_url, searched_phrase, n, t, visited=None):
     visited[searched_phrase] = True
     print(n, searched_phrase)
     n -= 1
-    scraper = WikiScraper(base_url, searched_phrase, False)
+    scraper = WikiScraper(base_url, searched_phrase)
     count = scraper.count_words()
     add_words_to_json(count)
 
@@ -314,7 +322,7 @@ def auto_count_words(base_url, searched_phrase, n, t, visited=None):
 
     return n
 
-def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filename="words_count.json"):
+def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filename="word-counts.json"):
     """ Performs analysis of the words counted in the JSON file.
 
         Compares the frequencies of words counted in JSON file to the frequencies
@@ -323,7 +331,7 @@ def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filen
 
         :param mode: 'language' or 'article' - to decide which top words to take.
         :param n: How many words to compare.
-        :param filename: Name of the JSON file with counted words. Defaults to 'words_count.json'.
+        :param filename: Name of the JSON file with counted words. Defaults to 'word-counts.json'.
         :param chart: If true, creates grouped bar chart comparing frequencies of the words.
         :param chart_path: path, where to save the chart. If None, current directory is used.
 
