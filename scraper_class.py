@@ -11,6 +11,7 @@ import pandas as pd
 import wordfreq as wf
 import matplotlib.pyplot as plt
 
+
 class WikiScraper:
     """ Object for wiki scraping.
 
@@ -197,7 +198,7 @@ class WikiScraper:
             print(f"Unexpected error converting HTML to data frame: {err}")
             return None
 
-        count = (pd.Series(df.values.flatten()) # flatten the df into one column, without labels.
+        count = (pd.Series(df.values.flatten())  # flatten the df into one column, without labels.
                  .value_counts()
                  .reset_index()
                  .set_axis(['words', 'count'], axis=1)
@@ -251,8 +252,7 @@ class WikiScraper:
         for link in all_links:
             if link.has_attr('href'):
                 link = link['href']
-                # We are taking only links that stay in the wiki, and we are skipping things like 'File:' 'User:' etc.
-                if link.startswith('/wiki/') and not ':' in link:
+                if is_article_link(link):
                     wiki_article_links.append(link)
 
         return wiki_article_links
@@ -265,7 +265,22 @@ class WikiScraper:
         print("Please verify the license before further use.")
         print("-" * 40)
 
+
 '''============================ OTHER METHODS =============================='''
+
+
+def is_article_link(link):
+    """ Returns true if link is valid relative link to the wiki article."""
+    # We are taking only links that stay in the wiki, and we are skipping things like 'File:' 'User:' etc.
+    if link.startswith('/wiki/') and not ':' in link:
+        return True
+    return False
+
+
+def extract_phrase(link):
+    """ Extracts phrase from wiki article's relative link."""
+    return link[6:]
+
 
 def add_words_to_json(words, filename="word-counts.json"):
     """ Adds counted words to the JSON file.
@@ -287,6 +302,7 @@ def add_words_to_json(words, filename="word-counts.json"):
 
     with open(filename, 'w') as f:
         json.dump(new_data, f, indent=4)
+
 
 def auto_count_words(base_url, searched_phrase, n, t, visited=None):
     """Automatically counts words in the articles, iterating through them using onsite links.
@@ -316,11 +332,12 @@ def auto_count_words(base_url, searched_phrase, n, t, visited=None):
 
     for link in links:
         if n == 0: return 0
-        phrase = link[6:] # Delete '/wiki/' prefix.
+        phrase = extract_phrase(link)
         time.sleep(t)
         n = auto_count_words(base_url, phrase, n, t, visited)
 
     return n
+
 
 def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filename="word-counts.json"):
     """ Performs analysis of the words counted in the JSON file.
