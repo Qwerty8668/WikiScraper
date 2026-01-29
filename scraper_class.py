@@ -41,8 +41,6 @@ class WikiScraper:
         self.formatted_phrase = searched_phrase.replace(" ", "_")
         self.url = base_url + self.formatted_phrase
         self.html = self.get_html()
-        if self.html is None:
-            exit(1)
 
     def get_html(self):
         """ Returns HTML of the article (without menu of the site) from self.url.
@@ -246,7 +244,8 @@ class WikiScraper:
         for link in all_links:
             if link.has_attr('href'):
                 link = link['href']
-                if link.startswith('/wiki/'):
+                # We are taking only links that stay in the wiki, and we are skipping things like 'File:' 'User:' etc.
+                if link.startswith('/wiki/') and not ':' in link:
                     wiki_article_links.append(link)
 
         return wiki_article_links
@@ -288,21 +287,24 @@ def auto_count_words(base_url, searched_phrase, n, t, visited=None):
     if visited is None:
         visited = {}
     if visited.get(searched_phrase, False):
-        return
+        return n
 
     visited[searched_phrase] = True
-    print(searched_phrase)
+    print(n, searched_phrase)
+    n -= 1
     scraper = WikiScraper(base_url, searched_phrase, False)
-    scraper.count_words()
+    count = scraper.count_words()
+    add_words_to_json(count)
 
     links = scraper.get_article_links()
 
     for link in links:
-        if n == 0: return
-        n -= 1
-        phrase = link.split('/')[-1]
+        if n == 0: return 0
+        phrase = link[6:] # Delete '/wiki/' prefix.
         time.sleep(t)
-        auto_count_words(base_url, phrase, n, t, visited)
+        n = auto_count_words(base_url, phrase, n, t, visited)
+
+    return n
 
 def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filename="words_count.json"):
     """ Performs analysis of the words counted in the JSON file.
