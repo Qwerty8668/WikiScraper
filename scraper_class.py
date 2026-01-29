@@ -62,7 +62,13 @@ class WikiScraper:
             try:
                 with open(file_path, "r") as file:
                     html = file.read()
-                    return html
+                    soup = BeautifulSoup(html, 'html.parser')
+                    element = soup.find('div', id='content')
+                    if element is None:
+                        print("No content found.")
+                        return None
+
+                    return str(element)
 
             except FileNotFoundError:
                 print("File not found!")
@@ -252,7 +258,7 @@ class WikiScraper:
         for link in all_links:
             if link.has_attr('href'):
                 link = link['href']
-                if is_article_link(link):
+                if is_relative_article_link(link):
                     wiki_article_links.append(link)
 
         return wiki_article_links
@@ -269,17 +275,22 @@ class WikiScraper:
 '''============================ OTHER METHODS =============================='''
 
 
-def is_article_link(link):
+def is_relative_article_link(link):
     """ Returns true if link is valid relative link to the wiki article."""
+    if link is None:
+        return False
+    link = str(link)
     # We are taking only links that stay in the wiki, and we are skipping things like 'File:' 'User:' etc.
-    if link.startswith('/wiki/') and not ':' in link:
+    if link.startswith('/wiki/') and not ':' in link and len(link) > 6:
         return True
     return False
 
 
 def extract_phrase(link):
     """ Extracts phrase from wiki article's relative link."""
-    return link[6:]
+    if is_relative_article_link(link):
+        return str(link[6:])
+    return None
 
 
 def add_words_to_json(words, filename="word-counts.json"):
@@ -374,6 +385,9 @@ def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filen
     if mode == 'language':
         top_n_words = wf.top_n_list(lang='en', n=n, wordlist='small')
     elif mode == 'article':
+        if len(my_data) < n:
+            print("Not enough words to analyze.")
+            return None
         top_n_words = dict(sorted(my_data.items(), key=lambda item: item[1], reverse=True)[:n])
     else:
         print(f"No mode named {mode}")
@@ -411,13 +425,16 @@ def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filen
                 print(f'Error: Creating directory {dirname}')
                 return df
 
+        plot_width = max(8, int(n * 0.8))
+
         df.plot(
             x='word',
             y=['frequency in the article', 'frequency in english'],
             kind='bar',
             color=['blue', 'red'],
             rot=0,
-            width=0.6
+            width=0.6,
+            figsize=(plot_width, 6)
         )
 
         plt.title("Frequency of some words on Wiki")
