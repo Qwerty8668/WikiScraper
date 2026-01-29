@@ -385,6 +385,9 @@ def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filen
     if mode == 'language':
         top_n_words = wf.top_n_list(lang='en', n=n, wordlist='small')
     elif mode == 'article':
+        if len(my_data) < n:
+            print("Not enough words to analyze.")
+            return None
         top_n_words = dict(sorted(my_data.items(), key=lambda item: item[1], reverse=True)[:n])
     else:
         print(f"No mode named {mode}")
@@ -422,13 +425,16 @@ def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filen
                 print(f'Error: Creating directory {dirname}')
                 return df
 
+        plot_width = max(8, int(n * 0.8))
+
         df.plot(
             x='word',
             y=['frequency in the article', 'frequency in english'],
             kind='bar',
             color=['blue', 'red'],
             rot=0,
-            width=0.6
+            width=0.6,
+            figsize=(plot_width, 6)
         )
 
         plt.title("Frequency of some words on Wiki")
