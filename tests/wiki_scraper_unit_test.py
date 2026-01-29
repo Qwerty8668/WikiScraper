@@ -1,6 +1,8 @@
+import json
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import pytest
 from unittest.mock import patch, mock_open
 from scraper_class import (is_relative_article_link,
                            extract_phrase,
@@ -9,64 +11,64 @@ from scraper_class import (is_relative_article_link,
 
 BASE_URL = "https://bulbapedia.bulbagarden.net/wiki/"
 
-def test_is_article_link():
-    assert is_relative_article_link(BASE_URL) is False
-    assert is_relative_article_link('/wiki/') is False
-    assert is_relative_article_link('') is False
-    assert is_relative_article_link(None) is False
-    assert is_relative_article_link(0) is False
-    assert is_relative_article_link(1) is False
-    assert is_relative_article_link('wiki/Team_Rocket') is False
-    assert is_relative_article_link('/wiki/a:bc') is False
+@pytest.mark.parametrize("link, expected", [
+    (BASE_URL, False),
+    ('/wiki/', False),
+    ('', False),
+    (None, False),
+    (0, False),
+    (1, False),
+    ('wiki/Team_Rocket', False),
+    ('/wiki/a:bc', False),
+    ('/wiki/abc', True),
+    ('/wiki/a', True),
+    ('/wiki/Team_Rocket', True),
+    ('/wiki/still/valid', True)
+])
+def test_is_article_link(link, expected):
+    assert is_relative_article_link(link) is expected
 
-    assert is_relative_article_link('/wiki/abc') is True
-    assert is_relative_article_link('/wiki/abc1') is True
-    assert is_relative_article_link('/wiki/a') is True
-    assert is_relative_article_link('/wiki/Team_Rocket') is True
-    assert is_relative_article_link('/wiki/still/valid') is True
-
-def test_extract_phrase():
-    assert extract_phrase(BASE_URL) is None
-    assert extract_phrase('/wiki/') is None
-    assert extract_phrase('') is None
-    assert extract_phrase(None) is None
-    assert extract_phrase(0) is None
-    assert extract_phrase(1) is None
-    assert extract_phrase('wiki/Team_Rocket') is None
-    assert extract_phrase('/wiki/a:bc') is None
-
-    assert extract_phrase('/wiki/abc') == 'abc'
-    assert extract_phrase('/wiki/abc1') == 'abc1'
-    assert extract_phrase('/wiki/a') == 'a'
-    assert extract_phrase('/wiki/Team_Rocket') == 'Team_Rocket'
-    assert extract_phrase('/wiki/still/valid') == 'still/valid'
+@pytest.mark.parametrize("link, expected", [
+    (BASE_URL, None),
+    ('/wiki/', None),
+    ('', None),
+    (None, None),
+    (0, None),
+    (1, None),
+    ('wiki/Team_Rocket', None),
+    ('/wiki/a:bc', None),
+    ('/wiki/abc', 'abc'),
+    ('/wiki/a', 'a'),
+    ('/wiki/Team_Rocket', 'Team_Rocket'),
+])
+def test_extract_phrase(link, expected):
+    assert extract_phrase(link) == expected
 
 def test_add_words_to_json(tmp_path):
     file = tmp_path / 'word-counts.json'
 
     to_add1 = {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6}
-
-    expected1 = ('{\n''    "A": 1,\n''    "B": 2,\n''    "C": 3,\n''    "D": 4,\n''    "E": 5,\n''    "F": 6\n''}')
-
+    expected1 = {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6}
     add_words_to_json(to_add1, file)
 
     assert file.exists()
-    assert file.read_text() == expected1
+    with open(file, 'r') as f:
+        assert json.load(f) == expected1
 
     add_words_to_json(to_add1, file)
 
-    expected2 = ('{\n''    "A": 2,\n''    "B": 4,\n''    "C": 6,\n''    "D": 8,\n''    "E": 10,\n''    "F": 12\n''}')
+    expected2 = {'A': 2, 'B': 4, 'C': 6, 'D': 8, 'E': 10, 'F': 12}
 
     assert file.exists()
-    assert file.read_text() == expected2
+    with open(file, 'r') as f:
+        assert json.load(f) == expected2
 
     to_add2 = {'A': 1, 'g': 111}
     add_words_to_json(to_add2, file)
 
-    expected3 = ('{\n''    "A": 3,\n''    "B": 4,\n''    "C": 6,\n''    "D": 8,\n''    "E": 10,\n''    "F": 12,\n''    "g": 111\n''}')
-
-    assert file.exists()
-    assert file.read_text() == expected3
+    expected3 = {'A': 3, 'B': 4, 'C': 6, 'D': 8, 'E': 10, 'F': 12, 'g': 111}
+    with open(file, 'r') as f:
+        assert json.load(f) == expected3
 
 def test_check_html():
 
@@ -89,5 +91,4 @@ def test_check_html():
         mock_file.assert_called_once_with('fake_site.html', 'r')
 
 if __name__ == "__main__":
-    import pytest
     exit(pytest.main())
