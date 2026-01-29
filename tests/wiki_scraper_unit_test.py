@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from unittest.mock import patch, mock_open
 from scraper_class import (is_relative_article_link,
                            extract_phrase,
@@ -84,3 +87,7 @@ def test_check_html():
         scraper3 = WikiScraper("base_url", "fake_site", use_local_html_file=True)
         assert scraper3.check_html() is True
         mock_file.assert_called_once_with('fake_site.html', 'r')
+
+if __name__ == "__main__":
+    import pytest
+    exit(pytest.main())
