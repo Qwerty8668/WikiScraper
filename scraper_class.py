@@ -151,7 +151,7 @@ class WikiScraper:
         return summ.get_text()
 
     def find_table(self, n, first_row_is_header=False):
-        """ Returns the nth table in the article.
+        """ Returns the nth table in the article and table of number of each word in the table.
 
         First column is always taken as the row indexes.
 
@@ -160,7 +160,7 @@ class WikiScraper:
                                     Otherwise, header is not specified.
 
         :return:
-            On success, returns the nth table as a dataframe.
+            On success, returns the nth table as a dataframe and dataframe with counted words.
             If self.html is none, there is less than n tables in the article
             or the HTML for the table is broken (pandas couldn't read it), returns None.
         """
@@ -189,7 +189,13 @@ class WikiScraper:
             print(f"Unexpected error converting HTML to data frame: {err}")
             return None
 
-        return df
+        count = (pd.Series(df.values.flatten()) # flatten the df into one column, without labels.
+                 .value_counts()
+                 .reset_index()
+                 .set_axis(['words', 'count'], axis=1)
+                 )
+
+        return df, count
 
     def save_table(self, df):
         """ Saves dataframe to the csv file.
@@ -263,13 +269,14 @@ def add_words_to_json(words, filename="words_count.json"):
     new_data = Counter(old_data) + Counter(words)
 
     with open(filename, 'w') as f:
-        json.dump(new_data, f)
+        json.dump(new_data, f, indent=4)
 
-def auto_count_words(searched_phrase, n, t, visited=None):
+def auto_count_words(base_url, searched_phrase, n, t, visited=None):
     """Automatically counts words in the articles, iterating through them using onsite links.
 
     Recursively performs DFS on found links. Goes through maximally n links, waits t seconds before going to the next link.
 
+    :param base_url: Base for the url of the wiki (e.g. https://example.com/wiki/)
     :param searched_phrase: Phrase to search for.
     :param n: Number of links yet to check.
     :param t: Time between site downloads.
@@ -282,7 +289,7 @@ def auto_count_words(searched_phrase, n, t, visited=None):
 
     visited[searched_phrase] = True
     print(searched_phrase)
-    scraper = WikiScraper('https://bulbapedia.bulbagarden.net/wiki/', searched_phrase, False)
+    scraper = WikiScraper(base_url, searched_phrase, False)
     scraper.count_words()
 
     links = scraper.get_article_links()
@@ -294,7 +301,7 @@ def auto_count_words(searched_phrase, n, t, visited=None):
         time.sleep(t)
         auto_count_words(phrase, n, t, visited)
 
-def analyze_relative_word_frequency(mode, n, filename="words_count.json", chart=False, chart_path=None):
+def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filename="words_count.json"):
     """ Performs analysis of the words counted in the JSON file.
 
         Compares the frequencies of words counted in JSON file to the frequencies
