@@ -62,7 +62,13 @@ class WikiScraper:
             try:
                 with open(file_path, "r") as file:
                     html = file.read()
-                    return html
+                    soup = BeautifulSoup(html, 'html.parser')
+                    element = soup.find('div', id='content')
+                    if element is None:
+                        print("No content found.")
+                        return None
+
+                    return str(element)
 
             except FileNotFoundError:
                 print("File not found!")
@@ -252,7 +258,7 @@ class WikiScraper:
         for link in all_links:
             if link.has_attr('href'):
                 link = link['href']
-                if is_article_link(link):
+                if is_relative_article_link(link):
                     wiki_article_links.append(link)
 
         return wiki_article_links
@@ -269,17 +275,22 @@ class WikiScraper:
 '''============================ OTHER METHODS =============================='''
 
 
-def is_article_link(link):
+def is_relative_article_link(link):
     """ Returns true if link is valid relative link to the wiki article."""
+    if link is None:
+        return False
+    link = str(link)
     # We are taking only links that stay in the wiki, and we are skipping things like 'File:' 'User:' etc.
-    if link.startswith('/wiki/') and not ':' in link:
+    if link.startswith('/wiki/') and not ':' in link and len(link) > 6:
         return True
     return False
 
 
 def extract_phrase(link):
     """ Extracts phrase from wiki article's relative link."""
-    return link[6:]
+    if is_relative_article_link(link):
+        return str(link[6:])
+    return None
 
 
 def add_words_to_json(words, filename="word-counts.json"):
