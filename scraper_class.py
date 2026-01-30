@@ -280,7 +280,7 @@ def is_relative_article_link(link):
     if link is None:
         return False
     link = str(link)
-    banned_words = ['File:', 'User:', 'Help:', 'Bulbapedia:', 'Special:']
+    banned_words = ['File:', 'User:', 'Help:', 'Bulbapedia:', 'Special:', 'Template:', 'MediaWiki:', 'Category:', 'Browse:']
     # We are taking only links that stay in the wiki, and we are skipping things like 'File:' 'User:' etc.
     if link.startswith('/wiki/') and len(link) > 6 and not any(word in link for word in banned_words):
 
