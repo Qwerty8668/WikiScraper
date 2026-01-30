@@ -186,7 +186,7 @@ class WikiScraper:
         soup = BeautifulSoup(html, 'html.parser')
         tables = soup.find_all('table', limit=n)
         if tables is None or len(tables) < n:
-            print(f"There is less than {n} table in the article.")
+            print(f"There is less than {n} tables in the article.")
             return None
 
         if first_row_is_header:
@@ -280,8 +280,10 @@ def is_relative_article_link(link):
     if link is None:
         return False
     link = str(link)
+    banned_words = ['File:', 'User:', 'Help:', 'Bulbapedia:', 'Special:']
     # We are taking only links that stay in the wiki, and we are skipping things like 'File:' 'User:' etc.
-    if link.startswith('/wiki/') and not ':' in link and len(link) > 6:
+    if link.startswith('/wiki/') and len(link) > 6 and not any(word in link for word in banned_words):
+
         return True
     return False
 
@@ -289,6 +291,9 @@ def is_relative_article_link(link):
 def extract_phrase(link):
     """ Extracts phrase from wiki article's relative link."""
     if is_relative_article_link(link):
+        # /wiki/Pokémon and /wiki/Pokémon#subsection is still the same site
+        if '#' in link:
+            link = link.split('#')[0]
         return str(link[6:])
     return None
 
@@ -299,7 +304,6 @@ def add_words_to_json(words, filename="word-counts.json"):
     :param words: Dictionary of words, with their count as a value.
     :param filename: Name of the file to add the words count.
     """
-
     if os.path.isfile(filename):
         with open(filename, 'r') as f:
             try:
@@ -315,7 +319,7 @@ def add_words_to_json(words, filename="word-counts.json"):
         json.dump(new_data, f, indent=4)
 
 
-def auto_count_words(base_url, searched_phrase, n, t, visited=None):
+def auto_count_words(base_url, searched_phrase, n, t, visited=None, depth=0):
     """Automatically counts words in the articles, iterating through them using onsite links.
 
     Recursively performs DFS on found links. Goes through maximally n links,
@@ -326,28 +330,28 @@ def auto_count_words(base_url, searched_phrase, n, t, visited=None):
     :param n: Number of links yet to check.
     :param t: Time between site downloads.
     :param visited: Dictionary of visited links.
+    :param depth: current depth of dfs.
     """
     if visited is None:
         visited = {}
     if visited.get(searched_phrase, False):
-        return n
+        return
 
     visited[searched_phrase] = True
-    print(n, searched_phrase)
-    n -= 1
+    print(f"Depth: {depth}. Phrase: {searched_phrase}")
     scraper = WikiScraper(base_url, searched_phrase)
     count = scraper.count_words()
     add_words_to_json(count)
 
     links = scraper.get_article_links()
+    if links is not None:
+        for link in links:
+            if n == 0: return
+            phrase = extract_phrase(link)
+            time.sleep(t)
+            auto_count_words(base_url, phrase, n - 1, t, visited, depth+1)
 
-    for link in links:
-        if n == 0: return 0
-        phrase = extract_phrase(link)
-        time.sleep(t)
-        n = auto_count_words(base_url, phrase, n, t, visited)
-
-    return n
+    return
 
 
 def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filename="word-counts.json"):
@@ -394,14 +398,8 @@ def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filen
         return None
 
     for word in top_n_words:
-        my_freq = my_data.get(word, 0) / words_total
-        if my_freq > 0:
-            my_zipf = math.log10(my_freq * 10 ** 9)
-        else:
-            my_zipf = np.nan
 
-        # Wordfreq zipf values are also rounded like that.
-        my_zipf = round(my_zipf, 2)
+        my_zipf = calc_zipf(my_data.get(word, 0), words_total)
 
         lang_zipf = wf.zipf_frequency(word, lang='en', wordlist='small')
 
@@ -447,3 +445,14 @@ def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filen
             print("Error: Saving the chart is not possible.")
             return df
     return df
+
+def calc_zipf(count, total):
+    my_freq = count / total
+    if my_freq > 0:
+        my_zipf = math.log10(my_freq * 10 ** 9)
+        # Wordfreq zipf values are also rounded like that.
+        my_zipf = round(my_zipf, 2)
+    else:
+        my_zipf = np.nan
+
+    return my_zipf
