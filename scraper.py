@@ -4,6 +4,8 @@ import math
 import os
 import time
 from collections import Counter
+from pathlib import Path
+
 import numpy as np
 import requests
 from bs4 import BeautifulSoup
@@ -221,7 +223,9 @@ class WikiScraper:
         if df is None:
             return None
         try:
-            df.to_csv(self.formatted_phrase + '.csv')
+            csv_path = Path('data')
+            csv_path.mkdir(parents=True, exist_ok=True)
+            df.to_csv('data/' + self.formatted_phrase + '.csv')
         except Exception as err:
             print(f"Unexpected error: {err}")
 
@@ -272,7 +276,7 @@ class WikiScraper:
         print("-" * 40)
 
 
-'''============================ OTHER METHODS =============================='''
+'''============================ OTHER FUNCTIONS =============================='''
 
 
 def is_relative_article_link(link):
@@ -298,7 +302,7 @@ def extract_phrase(link):
     return None
 
 
-def add_words_to_json(words, filename="word-counts.json"):
+def add_words_to_json(words, filename="data/word-counts.json"):
     """ Adds counted words to the JSON file.
 
     :param words: Dictionary of words, with their count as a value.
@@ -315,6 +319,8 @@ def add_words_to_json(words, filename="word-counts.json"):
 
     new_data = Counter(old_data) + Counter(words)
 
+    data_path = Path('data')
+    data_path.mkdir(parents=True, exist_ok=True)
     with open(filename, 'w') as f:
         json.dump(new_data, f, indent=4)
 
@@ -354,7 +360,7 @@ def auto_count_words(base_url, searched_phrase, n, t, visited=None, depth=0):
     return
 
 
-def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filename="word-counts.json"):
+def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filename="data/word-counts.json"):
     """ Performs analysis of the words counted in the JSON file.
 
         Compares the frequencies of words counted in JSON file to the frequencies
@@ -363,7 +369,7 @@ def analyze_relative_word_frequency(mode, n, chart=False, chart_path=None, filen
 
         :param mode: 'language' or 'article' - to decide which top words to take.
         :param n: How many words to compare.
-        :param filename: Name of the JSON file with counted words. Defaults to 'word-counts.json'.
+        :param filename: Name of the JSON file with counted words. Defaults to 'data/word-counts.json'.
         :param chart: If true, creates grouped bar chart comparing frequencies of the words.
         :param chart_path: path, where to save the chart. If None, current directory is used.
 

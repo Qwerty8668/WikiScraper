@@ -1,8 +1,8 @@
 import argparse
-from scraper_class import (WikiScraper,
-                           add_words_to_json,
-                           analyze_relative_word_frequency,
-                           auto_count_words)
+from scraper import (WikiScraper,
+                     add_words_to_json,
+                     analyze_relative_word_frequency,
+                     auto_count_words)
 
 def parse_arguments():
     """Parse command line arguments using argparse.

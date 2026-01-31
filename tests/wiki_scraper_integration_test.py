@@ -6,7 +6,7 @@ from wiki_scraper import WikiScraper
 def test_summary():
     """Test the summary function."""
     scraper = WikiScraper(base_url='https://bulbapedia.bulbagarden.net/wiki/',
-                searched_phrase="Team Rocket",
+                searched_phrase="fixtures/Team_Rocket",
                 use_local_html_file=True)
 
     assert scraper.check_html() == True

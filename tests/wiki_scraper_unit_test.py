@@ -4,10 +4,10 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import pytest
 from unittest.mock import patch, mock_open
-from scraper_class import (is_relative_article_link,
-                           extract_phrase,
-                           add_words_to_json,
-                           WikiScraper)
+from scraper import (is_relative_article_link,
+                     extract_phrase,
+                     add_words_to_json,
+                     WikiScraper)
 
 BASE_URL = "https://bulbapedia.bulbagarden.net/wiki/"
 
